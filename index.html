@@ -1,0 +1,694 @@
+<!DOCTYPE html>
+<html lang="th">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ระบบตรวจสอบโรคพืช - Plant Disease Detector</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest/dist/tf.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@latest/dist/teachablemachine-image.min.js"></script>
+    <link
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css"
+      rel="stylesheet"
+    />
+
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600;700&family=Prompt:wght@300;400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+
+    <!-- Custom Tailwind Config -->
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            fontFamily: {
+              kanit: ["Kanit", "sans-serif"],
+              prompt: ["Prompt", "sans-serif"],
+            },
+          },
+        },
+      };
+    </script>
+  </head>
+  <body
+    class="bg-gradient-to-br from-white to-green-50 min-h-screen font-kanit"
+  >
+    <!-- Header -->
+    <header class="bg-white shadow-lg border-b-4 border-green-500">
+      <div class="container mx-auto px-6 py-4">
+        <div class="flex items-center justify-center">
+          <div class="flex items-center space-x-3">
+            <div class="bg-green-500 p-3 rounded-full">
+              <i class="fas fa-leaf text-white text-2xl"></i>
+            </div>
+            <div>
+              <h1 class="text-3xl font-bold text-gray-800">
+                ระบบตรวจสอบโรคพืช
+              </h1>
+              <p class="text-green-600 font-medium">
+                Plant Disease Detection System
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="container mx-auto px-6 py-8">
+      <!-- Control Panel -->
+      <div
+        class="bg-white rounded-2xl shadow-xl p-6 mb-8 border border-green-100"
+      >
+        <div class="text-center mb-6">
+          <h2 class="text-2xl font-bold text-gray-800 mb-2">
+            เลือกวิธีการตรวจสอบ
+          </h2>
+          <p class="text-gray-600">คุณสามารถใช้กล้องหรืออัพโหลดรูปภาพได้</p>
+        </div>
+
+        <div
+          class="flex flex-col sm:flex-row gap-4 justify-center items-center"
+        >
+          <button
+            id="cameraBtn"
+            onclick="startCamera()"
+            class="bg-green-500 hover:bg-green-600 text-white px-6 py-3 rounded-lg shadow-lg transition-all duration-300 flex items-center space-x-2 transform hover:scale-105"
+          >
+            <i class="fas fa-camera"></i>
+            <span>เปิดกล้อง</span>
+          </button>
+
+          <div class="text-gray-400 font-bold">หรือ</div>
+
+          <label
+            for="imageUpload"
+            class="bg-white border-2 border-green-500 text-green-500 hover:bg-green-50 px-6 py-3 rounded-lg shadow-lg cursor-pointer transition-all duration-300 flex items-center space-x-2 transform hover:scale-105"
+          >
+            <i class="fas fa-upload"></i>
+            <span>อัพโหลดรูปภาพ</span>
+          </label>
+          <input
+            type="file"
+            id="imageUpload"
+            accept="image/*"
+            class="hidden"
+            onchange="handleImageUpload(event)"
+          />
+        </div>
+      </div>
+
+      <!-- Camera/Image Display Area -->
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        <!-- Image Display -->
+        <div class="bg-white rounded-2xl shadow-xl p-6 border border-green-100">
+          <h3 class="text-xl font-bold text-gray-800 mb-4 flex items-center">
+            <i class="fas fa-image text-green-500 mr-2"></i>
+            ภาพที่ตรวจสอบ
+          </h3>
+
+          <div
+            id="imageContainer"
+            class="bg-gray-100 rounded-lg border-2 border-dashed border-gray-300 min-h-[300px] flex items-center justify-center"
+          >
+            <div id="webcam-container" class="hidden"></div>
+            <div id="uploadedImageContainer" class="hidden"></div>
+            <div id="placeholder" class="text-center text-gray-500">
+              <i class="fas fa-camera text-6xl mb-4 text-gray-300"></i>
+              <p class="text-lg">กดปุ่มเพื่อเริ่มตรวจสอบ</p>
+            </div>
+          </div>
+
+          <div class="mt-4 flex justify-center space-x-4">
+            <button
+              id="stopCameraBtn"
+              onclick="stopCamera()"
+              class="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg hidden transition-all duration-300"
+            >
+              <i class="fas fa-stop mr-2"></i>หยุดกล้อง
+            </button>
+          </div>
+        </div>
+
+        <!-- Results Display -->
+        <div class="bg-white rounded-2xl shadow-xl p-6 border border-green-100">
+          <h3 class="text-xl font-bold text-gray-800 mb-4 flex items-center">
+            <i class="fas fa-chart-bar text-green-500 mr-2"></i>
+            ผลการตรวจสอบ
+          </h3>
+
+          <div id="label-container" class="space-y-3">
+            <div class="bg-gray-100 rounded-lg p-4 text-center text-gray-500">
+              <i class="fas fa-seedling text-4xl mb-3 text-gray-300"></i>
+              <p>รอการตรวจสอบ...</p>
+            </div>
+          </div>
+
+          <div id="loadingIndicator" class="hidden text-center py-8">
+            <div
+              class="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-green-500"
+            ></div>
+            <p class="mt-2 text-green-600">กำลังวิเคราะห์...</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Instructions -->
+      <div class="mt-8 bg-green-50 rounded-2xl p-6 border border-green-200">
+        <h3 class="text-xl font-bold text-green-800 mb-4 flex items-center">
+          <i class="fas fa-info-circle mr-2"></i>
+          คำแนะนำการใช้งาน
+        </h3>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-green-700">
+          <div class="flex items-start space-x-3">
+            <i class="fas fa-lightbulb text-green-500 mt-1"></i>
+            <div>
+              <h4 class="font-semibold">เพื่อผลลัพธ์ที่แม่นยำ:</h4>
+              <p>ถ่ายภาพใบไม้ที่มีแสงสว่างเพียงพอและชัดเจน</p>
+            </div>
+          </div>
+          <div class="flex items-start space-x-3">
+            <i class="fas fa-camera text-green-500 mt-1"></i>
+            <div>
+              <h4 class="font-semibold">มุมการถ่าย:</h4>
+              <p>ถ่ายจากระยะใกล้ให้เห็นรายละเอียดของใบ</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Disease Information -->
+      <div class="mt-8 bg-blue-50 rounded-2xl p-6 border border-blue-200">
+        <h3 class="text-xl font-bold text-blue-800 mb-4 flex items-center">
+          <i class="fas fa-book-medical mr-2"></i>
+          ข้อมูลโรคพืชที่ตรวจสอบได้
+        </h3>
+        <div
+          class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 text-sm"
+        >
+          <div class="bg-white rounded-lg p-3 border border-blue-200">
+            <h4 class="font-semibold text-red-700">โรคเน่าเปื่อยดำ</h4>
+            <p class="text-gray-600">Black Rot - เกิดจากเชื้อรา</p>
+          </div>
+          <div class="bg-white rounded-lg p-3 border border-blue-200">
+            <h4 class="font-semibold text-purple-700">โรคราแป้งปุย</h4>
+            <p class="text-gray-600">Downy Mildew - ราที่มีลักษณะขุ่น</p>
+          </div>
+          <div class="bg-white rounded-lg p-3 border border-blue-200">
+            <h4 class="font-semibold text-green-700">ใบสุขภาพดี</h4>
+            <p class="text-gray-600">Healthy Leaf - ไม่มีอาการของโรค</p>
+          </div>
+          <div class="bg-white rounded-lg p-3 border border-blue-200">
+            <h4 class="font-semibold text-gray-700">โรคราแป้ง</h4>
+            <p class="text-gray-600">Powdery Mildew - ราสีขาวบนใบ</p>
+          </div>
+          <div class="bg-white rounded-lg p-3 border border-blue-200">
+            <h4 class="font-semibold text-orange-700">โรคสนิมใบ</h4>
+            <p class="text-gray-600">Rust Leaf - จุดสีส้มแดงบนใบ</p>
+          </div>
+          <div class="bg-white rounded-lg p-3 border border-blue-200">
+            <h4 class="font-semibold text-black">โรคราดำ</h4>
+            <p class="text-gray-600">Sooty Mold - ราสีดำบนใบ</p>
+          </div>
+          <div class="bg-white rounded-lg p-3 border border-blue-200">
+            <h4 class="font-semibold text-yellow-700">โรคจุดน้ำมันดิน</h4>
+            <p class="text-gray-600">Tar Spot - จุดดำคล้ายน้ำมันดิน</p>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <!-- Footer -->
+    <footer class="bg-white border-t border-green-200 mt-12">
+      <div class="container mx-auto px-6 py-6 text-center text-gray-600">
+        <p>© 2025 Plant Disease Detection System</p>
+      </div>
+    </footer>
+
+    <script>
+      // Teachable Machine Model URLs
+      const URL = "https://teachablemachine.withgoogle.com/models/DnurPwjau/";
+      const LEAF_DETECTION_MODEL_URL =
+        "https://teachablemachine.withgoogle.com/models/AJypP9WF-/";
+
+      let model, webcam, labelContainer, maxPredictions;
+      let leafModel;
+      let isModelLoaded = false;
+      let isLeafModelLoaded = false;
+
+      // Disease name translation
+      const diseaseTranslations = {
+        Black_rot: "โรคเน่าเปื่อยดำ",
+        Downy_mildew: "โรคราแป้งปุย",
+        Healthy_leaf: "ใบสุขภาพดี",
+        Powdery_mildew: "โรคราแป้ง",
+        Rust_leaf: "โรคสนิมใบ",
+        Sooty_mold: "โรคราดำ",
+        Tar_spot: "โรคจุดน้ำมันดิน",
+      };
+
+      // Debug function
+      function debug(message) {
+        console.log(message);
+        const debugContent = document.getElementById("debugContent");
+        if (debugContent) {
+          debugContent.innerHTML += `<div>${new Date().toLocaleTimeString()}: ${message}</div>`;
+          document.getElementById("debugInfo").classList.remove("hidden");
+        }
+      }
+
+      // Load models on page load
+      window.addEventListener("load", async () => {
+        debug("Starting to load models...");
+        await loadModel();
+        await loadLeafModel();
+      });
+
+      async function loadLeafModel() {
+        try {
+          debug("Loading leaf detection model...");
+          const modelURL = LEAF_DETECTION_MODEL_URL + "model.json";
+          const metadataURL = LEAF_DETECTION_MODEL_URL + "metadata.json";
+          leafModel = await tmImage.load(modelURL, metadataURL);
+          isLeafModelLoaded = true;
+          debug("Leaf model loaded successfully");
+        } catch (err) {
+          debug(`Failed to load leaf model: ${err.message}`);
+          console.error("ไม่สามารถโหลด Leaf Model ได้", err);
+          // Continue without leaf model
+          isLeafModelLoaded = false;
+        }
+      }
+
+      async function isLeafImage(img) {
+        if (!leafModel || !isLeafModelLoaded) {
+          debug("Leaf model not available, skipping leaf check");
+          return true; // ถ้าไม่มี leaf model ให้ผ่านไปเลย
+        }
+
+        try {
+          debug("Checking if image contains leaf...");
+          const prediction = await leafModel.predict(img);
+          debug(
+            `Leaf predictions: ${JSON.stringify(
+              prediction.map((p) => ({
+                class: p.className,
+                prob: p.probability.toFixed(3),
+              }))
+            )}`
+          );
+
+          // หา top prediction
+          const topPrediction = prediction.reduce((max, current) =>
+            current.probability > max.probability ? current : max
+          );
+          debug(
+            `Top prediction: ${topPrediction.className} (${(
+              topPrediction.probability * 100
+            ).toFixed(1)}%)`
+          );
+
+          // ตรวจสอบคำที่บ่งบอกว่าไม่ใช่ใบไม้อย่างชัดเจน
+          const topClassName = topPrediction.className.toLowerCase();
+          const badKeywords = [
+            "bad",
+            "not",
+            "no",
+            "none",
+            "other",
+            "background",
+            "invalid",
+            "object",
+          ];
+
+          // ถ้ามี bad keywords ให้ปฏิเสธ
+          if (badKeywords.some((keyword) => topClassName.includes(keyword))) {
+            debug(
+              `Image rejected: contains bad keyword in "${topPrediction.className}"`
+            );
+            return false;
+          }
+
+          // คำที่บ่งบอกว่าเป็นใบไม้หรือพืช (รวมทั้ง "good" ที่อาจหมายถึงใบไม้ดี)
+          const leafKeywords = [
+            "leaf",
+            "plant",
+            "vegetation",
+            "tree",
+            "green",
+            "botanical",
+            "good",
+            "healthy",
+            "fresh",
+          ];
+          const hasLeafKeyword = leafKeywords.some((keyword) =>
+            topClassName.includes(keyword)
+          );
+
+          // ถ้ามี leaf keyword และ confidence สูง ให้ผ่าน
+          if (hasLeafKeyword && topPrediction.probability > 0.7) {
+            debug(
+              `Image accepted: contains leaf keyword "${topPrediction.className}" with high confidence`
+            );
+            return true;
+          }
+
+          // หา class ที่เป็น leaf, plant, vegetation
+          const leafClasses = prediction.filter((p) => {
+            const className = p.className.toLowerCase();
+            return (
+              className.includes("leaf") ||
+              className.includes("plant") ||
+              className.includes("vegetation") ||
+              className.includes("tree") ||
+              className.includes("green") ||
+              className.includes("botanical")
+            );
+          });
+
+          if (leafClasses.length > 0) {
+            const bestLeafClass = leafClasses.reduce((max, current) =>
+              current.probability > max.probability ? current : max
+            );
+            debug(
+              `Best leaf class: ${bestLeafClass.className} (${(
+                bestLeafClass.probability * 100
+              ).toFixed(1)}%)`
+            );
+            return bestLeafClass.probability > 0.3;
+          }
+
+          // ถ้าไม่เจอ leaf class และ top prediction confidence สูง แสดงว่าน่าจะไม่ใช่ใบไม้
+          if (topPrediction.probability > 0.7) {
+            debug(`Image likely not a leaf: high confidence in non-leaf class`);
+            return false;
+          }
+
+          // ถ้า confidence ต่ำมาก ให้ผ่านไปเผื่อจะเป็นใบไม้
+          debug(`Low confidence prediction, allowing through`);
+          return topPrediction.probability > 0.2;
+        } catch (err) {
+          debug(`Error in leaf detection: ${err.message}`);
+          return true; // ถ้า error ให้ผ่านไปเลย
+        }
+      }
+
+      async function loadModel() {
+        try {
+          debug("Loading disease detection model...");
+          document
+            .getElementById("loadingIndicator")
+            .classList.remove("hidden");
+
+          const modelURL = URL + "model.json";
+          const metadataURL = URL + "metadata.json";
+
+          model = await tmImage.load(modelURL, metadataURL);
+          maxPredictions = model.getTotalClasses();
+          isModelLoaded = true;
+
+          // Setup label container
+          labelContainer = document.getElementById("label-container");
+          labelContainer.innerHTML =
+            '<div class="bg-green-50 rounded-lg p-4 text-center text-green-600"><i class="fas fa-check-circle mr-2"></i>พร้อมใช้งาน - เลือกวิธีการตรวจสอบ</div>';
+
+          document.getElementById("loadingIndicator").classList.add("hidden");
+          debug("Disease model loaded successfully");
+        } catch (error) {
+          debug(`Failed to load disease model: ${error.message}`);
+          console.error("Error loading model:", error);
+          labelContainer.innerHTML =
+            '<div class="bg-red-50 rounded-lg p-4 text-center text-red-600"><i class="fas fa-exclamation-triangle mr-2"></i>ไม่สามารถโหลดโมเดลได้</div>';
+          document.getElementById("loadingIndicator").classList.add("hidden");
+        }
+      }
+
+      async function startCamera() {
+        if (!isModelLoaded) {
+          alert("โปรดรอสักครู่ ระบบกำลังโหลด...");
+          return;
+        }
+
+        try {
+          debug("Starting camera...");
+          // Setup webcam
+          const flip = true;
+          webcam = new tmImage.Webcam(400, 400, flip);
+          await webcam.setup();
+          await webcam.play();
+
+          // Show webcam container
+          document.getElementById("placeholder").classList.add("hidden");
+          document
+            .getElementById("uploadedImageContainer")
+            .classList.add("hidden");
+          document
+            .getElementById("webcam-container")
+            .classList.remove("hidden");
+          document
+            .getElementById("webcam-container")
+            .appendChild(webcam.canvas);
+
+          // Style the canvas
+          webcam.canvas.className =
+            "rounded-lg border-2 border-green-300 w-full max-w-md mx-auto";
+
+          // Show stop button
+          document.getElementById("stopCameraBtn").classList.remove("hidden");
+          document.getElementById("cameraBtn").classList.add("hidden");
+
+          // Setup prediction labels
+          setupPredictionLabels();
+
+          // Start prediction loop
+          window.requestAnimationFrame(loop);
+          debug("Camera started successfully");
+        } catch (error) {
+          debug(`Camera error: ${error.message}`);
+          console.error("Camera error:", error);
+          alert("ไม่สามารถเข้าถึงกล้องได้ กรุณาตรวจสอบการอนุญาต");
+        }
+      }
+
+      function stopCamera() {
+        if (webcam) {
+          debug("Stopping camera...");
+          webcam.stop();
+          document.getElementById("webcam-container").classList.add("hidden");
+          document.getElementById("webcam-container").innerHTML = "";
+          document.getElementById("stopCameraBtn").classList.add("hidden");
+          document.getElementById("cameraBtn").classList.remove("hidden");
+          document.getElementById("placeholder").classList.remove("hidden");
+
+          // Reset labels
+          labelContainer.innerHTML =
+            '<div class="bg-green-50 rounded-lg p-4 text-center text-green-600"><i class="fas fa-check-circle mr-2"></i>พร้อมใช้งาน - เลือกวิธีการตรวจสอบ</div>';
+        }
+      }
+
+      async function loop() {
+        if (webcam) {
+          webcam.update();
+
+          // ลดความถี่ในการตรวจสอบ leaf
+          if (Math.random() < 0.3) {
+            // ตรวจสอบแค่ 30% ของเฟรม
+            const isLeaf = await isLeafImage(webcam.canvas);
+            if (!isLeaf) {
+              labelContainer.innerHTML =
+                '<div class="bg-yellow-100 rounded-lg p-4 text-center text-yellow-700"><i class="fas fa-search mr-2"></i>กำลังมองหาใบไม้...</div>';
+              window.requestAnimationFrame(loop);
+              return;
+            }
+          }
+
+          await predict();
+
+          window.requestAnimationFrame(loop);
+        }
+      }
+
+      async function handleImageUpload(event) {
+        if (!isModelLoaded) {
+          alert("โปรดรอสักครู่ ระบบกำลังโหลด...");
+          return;
+        }
+
+        const file = event.target.files[0];
+        if (file) {
+          debug(`Uploading file: ${file.name} (${file.size} bytes)`);
+          stopCamera();
+
+          const reader = new FileReader();
+          reader.onload = async function (e) {
+            const img = new Image();
+            img.onload = async function () {
+              debug(`Image loaded: ${img.width}x${img.height}`);
+
+              // ตรวจสอบว่าเป็นใบไม้หรือไม่
+              const isLeaf = await isLeafImage(img);
+              debug(`Is leaf check result: ${isLeaf}`);
+
+              if (!isLeaf) {
+                labelContainer.innerHTML =
+                  '<div class="bg-red-50 rounded-lg p-4 text-center text-red-600"><i class="fas fa-times-circle mr-2"></i>ไม่พบใบไม้ในรูปภาพ กรุณาอัพโหลดรูปใบไม้ใหม่</div>';
+                return; // หยุดการทำงาน ไม่ทำนายโรค
+              }
+
+              // แสดงภาพ
+              document.getElementById("placeholder").classList.add("hidden");
+              document
+                .getElementById("uploadedImageContainer")
+                .classList.remove("hidden");
+              const container = document.getElementById(
+                "uploadedImageContainer"
+              );
+              container.innerHTML = "";
+              img.className =
+                "rounded-lg border-2 border-green-300 w-full max-w-md mx-auto";
+              container.appendChild(img);
+
+              // Setup label
+              setupPredictionLabels();
+
+              // ตรวจโรค
+              await predictImage(img);
+            };
+            img.src = e.target.result;
+          };
+          reader.readAsDataURL(file);
+        }
+      }
+
+      function setupPredictionLabels() {
+        labelContainer.innerHTML = "";
+        for (let i = 0; i < maxPredictions; i++) {
+          const div = document.createElement("div");
+          div.className = "bg-gray-50 rounded-lg p-3 border border-gray-200";
+          labelContainer.appendChild(div);
+        }
+      }
+
+      async function predict() {
+        if (model && webcam) {
+          const prediction = await model.predict(webcam.canvas);
+          displayPredictions(prediction);
+        }
+      }
+
+      async function predictImage(img) {
+        if (model) {
+          debug("Making disease prediction...");
+          const prediction = await model.predict(img);
+          debug(
+            `Disease predictions: ${JSON.stringify(
+              prediction.map((p) => ({
+                class: p.className,
+                prob: (p.probability * 100).toFixed(1) + "%",
+              }))
+            )}`
+          );
+          displayPredictions(prediction);
+        }
+      }
+
+      function getThaiDiseaseName(englishName) {
+        return diseaseTranslations[englishName] || englishName;
+      }
+
+      function getDiseaseIcon(englishName) {
+        const icons = {
+          Black_rot: "fas fa-exclamation-triangle text-red-600",
+          Downy_mildew: "fas fa-cloud-rain text-purple-600",
+          Healthy_leaf: "fas fa-check-circle text-green-600",
+          Powdery_mildew: "fas fa-snowflake text-gray-600",
+          Rust_leaf: "fas fa-burn text-orange-600",
+          Sooty_mold: "fas fa-smog text-black",
+          Tar_spot: "fas fa-circle text-yellow-600",
+        };
+        return icons[englishName] || "fas fa-leaf text-gray-500";
+      }
+
+      function displayPredictions(predictions) {
+        predictions.forEach((prediction, i) => {
+          const percentage = (prediction.probability * 100).toFixed(1);
+          const confidence = prediction.probability;
+          const thaiName = getThaiDiseaseName(prediction.className);
+          const iconClass = getDiseaseIcon(prediction.className);
+
+          let bgColor = "bg-gray-50";
+          let textColor = "text-gray-700";
+          let borderColor = "border-gray-300";
+
+          if (confidence > 0.5) {
+            // ลดเกณฑ์จาก 0.7 เป็น 0.5
+            if (prediction.className === "Healthy_leaf") {
+              bgColor = "bg-green-100";
+              textColor = "text-green-800";
+              borderColor = "border-green-300";
+            } else {
+              bgColor = "bg-red-100";
+              textColor = "text-red-800";
+              borderColor = "border-red-300";
+            }
+          } else if (confidence > 0.2) {
+            // ลดเกณฑ์จาก 0.4 เป็น 0.2
+            bgColor = "bg-yellow-100";
+            textColor = "text-yellow-800";
+            borderColor = "border-yellow-300";
+          } else {
+            bgColor = "bg-gray-100";
+            textColor = "text-gray-600";
+            borderColor = "border-gray-300";
+          }
+
+          if (labelContainer.childNodes[i]) {
+            labelContainer.childNodes[
+              i
+            ].className = `${bgColor} rounded-lg p-4 border-2 ${borderColor} transition-all duration-300`;
+            labelContainer.childNodes[i].innerHTML = `
+              <div class="flex items-center justify-between">
+                  <div class="flex items-center space-x-3">
+                      <i class="${iconClass}"></i>
+                      <div>
+                          <span class="font-semibold ${textColor} block">${thaiName}</span>
+                          <span class="text-xs text-gray-500">${
+                            prediction.className
+                          }</span>
+                      </div>
+                  </div>
+                  <div class="text-right">
+                      <span class="text-2xl font-bold ${textColor}">${percentage}%</span>
+                      <div class="w-24 bg-gray-200 rounded-full h-2 mt-1">
+                          <div class="h-2 rounded-full transition-all duration-500" 
+                               style="width: ${percentage}%; background-color: ${
+              confidence > 0.5
+                ? prediction.className === "Healthy_leaf"
+                  ? "#10B981"
+                  : "#EF4444"
+                : confidence > 0.2
+                ? "#F59E0B"
+                : "#6B7280"
+            }"></div>
+                      </div>
+                  </div>
+              </div>
+            `;
+          }
+        });
+      }
+
+      // Toggle debug info
+      document.addEventListener("keydown", function (e) {
+        if (e.key === "F12" || (e.ctrlKey && e.shiftKey && e.key === "I")) {
+          const debugInfo = document.getElementById("debugInfo");
+          debugInfo.classList.toggle("hidden");
+        }
+      });
+    </script>
+  </body>
+</html>
